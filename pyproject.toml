@@ -1,0 +1,22 @@
+[project]
+name = "femora-solver"
+version = "0.1.0"
+description = "A GPU-first, JAX-optimized explicit FEM solver"
+authors = [{name = "Femora Team"}]
+requires-python = ">=3.9"
+dependencies = [
+    "jax>=0.4.0",
+    "jaxlib>=0.4.0",
+    "numpy",
+    "h5py",
+]
+
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project.optional-dependencies]
+dev = [
+    "pytest",
+    "numpy>=1.20",
+]
