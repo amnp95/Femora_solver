@@ -4,6 +4,7 @@ from femora_solver.analysis.runner import Runner
 from femora_solver.state.state import State, FieldState
 from typing import Optional
 
+
 class Model:
     def __init__(self, name: str):
         self.name = name
@@ -21,6 +22,7 @@ class Model:
         self._execution_plan = None
         self._state = None
         self._dirty = 4 # FULL compile
+        self._profiler = None
         
     def add_nodes(self, coords):
         self._nodes = jnp.array(coords)
@@ -118,9 +120,38 @@ class Model:
         progress: bool = False,
         progress_every: int = 1,
         sync_progress: Optional[bool] = None,
+        profile: bool = False,
+        profile_export: Optional[str] = None,
     ):
+        """Run the simulation.
+
+        Parameters
+        ----------
+        dt : float
+            Time step size.
+        time : float
+            Total simulation time.
+        chunk_size : int, optional
+            Number of steps per lax.scan chunk.
+        progress : bool
+            Print progress to stdout.
+        progress_every : int
+            Print every N chunks.
+        sync_progress : bool, optional
+            Force GPU sync per chunk for accurate progress.
+        profile : bool
+            Enable phase-level profiling (uses decomposed stepping).
+        profile_export : str, optional
+            Path to export profiling results as JSON.
+        """
+        profiler = None
+        if profile:
+            from femora_solver.profiling.timer import SolverProfiler
+            profiler = SolverProfiler()
+            profiler.mark_start()
+
         if self._dirty >= 4:
-            self._execution_plan = self._compiler.full_compile(self)
+            self._execution_plan = self._compiler.full_compile(self, profiler=profiler)
             if self._state is None:
                 self._init_state()
         self._dirty = 0
@@ -134,4 +165,13 @@ class Model:
             progress=progress,
             progress_every=progress_every,
             sync_progress=sync_progress,
+            profiler=profiler,
         )
+
+        if profiler is not None:
+            profiler.mark_end()
+            self._profiler = profiler
+            print(profiler.summary())
+            if profile_export:
+                profiler.to_json(profile_export)
+                print(f"Profile exported to: {profile_export}")
