@@ -53,12 +53,19 @@ class Runner:
         state: State,
         dt: float,
         time: float,
+        chunk_size: Optional[int] = None,
         progress: bool = False,
         progress_every: int = 1,
         sync_progress: Optional[bool] = None,
     ) -> State:
         total_steps = int(round(time / dt))
-        chunk_size  = plan.chunk_size
+        if chunk_size is None:
+            chunk_size = int(plan.chunk_size)
+        else:
+            chunk_size = int(chunk_size)
+        if chunk_size <= 0:
+            raise ValueError("chunk_size must be a positive integer")
+
         step_fn     = build_step_fn(plan, dt)
         
         # JIT compile the scan body

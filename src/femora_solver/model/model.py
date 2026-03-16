@@ -110,7 +110,15 @@ class Model:
             history={}
         )
 
-    def run(self, dt, time, progress: bool = False, progress_every: int = 1, sync_progress: Optional[bool] = None):
+    def run(
+        self,
+        dt,
+        time,
+        chunk_size: Optional[int] = None,
+        progress: bool = False,
+        progress_every: int = 1,
+        sync_progress: Optional[bool] = None,
+    ):
         if self._dirty >= 4:
             self._execution_plan = self._compiler.full_compile(self)
             if self._state is None:
@@ -122,6 +130,7 @@ class Model:
             self._state,
             dt,
             time,
+            chunk_size=chunk_size,
             progress=progress,
             progress_every=progress_every,
             sync_progress=sync_progress,
