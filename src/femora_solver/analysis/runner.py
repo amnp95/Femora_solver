@@ -3,6 +3,8 @@ import threading
 import jax
 import h5py
 import numpy as np
+import time as _time
+from typing import Optional
 from femora_solver.state.state import State
 from femora_solver.compile.execution_plan import ExecutionPlan
 from femora_solver.analysis.transient_explicit import build_step_fn
@@ -51,6 +53,9 @@ class Runner:
         state: State,
         dt: float,
         time: float,
+        progress: bool = False,
+        progress_every: int = 1,
+        sync_progress: Optional[bool] = None,
     ) -> State:
         total_steps = int(round(time / dt))
         chunk_size  = plan.chunk_size
@@ -63,13 +68,40 @@ class Runner:
             return jax.lax.scan(step_fn, s, ts)
 
         writer = AsyncWriter(plan) if plan.recorder_plan.recorders else None
-        base_step = int(state.step)
 
-        for start in range(0, total_steps, chunk_size):
+        # Default: if user asked for progress, make it accurate by syncing per chunk.
+        if sync_progress is None:
+            sync_progress = bool(progress)
+
+        # Robustly get base_step and base_time on host for progress and interval logic.
+        def _to_int(x):
+            return int(x) if isinstance(x, (int, np.integer)) else int(jax.device_get(x))
+
+        def _to_float(x):
+            return float(x) if isinstance(x, (float, int, np.floating, np.integer)) else float(jax.device_get(x))
+
+        base_step = _to_int(state.step)
+        base_time = _to_float(state.time)
+
+        if progress:
+            n_chunks = int(np.ceil(total_steps / chunk_size)) if total_steps > 0 else 0
+            print(
+                f"Running {total_steps} steps (dt={dt:g}, time={time:g}s) in {n_chunks} chunks (chunk_size={chunk_size})...",
+                flush=True,
+            )
+
+        wall_start = _time.perf_counter()
+
+        for chunk_idx, start in enumerate(range(0, total_steps, chunk_size)):
             n = min(chunk_size, total_steps - start)
             # Advance time by dt each step; provide the new time (t_{n+1}) to the integrator.
             ts = state.time + dt * (jnp.arange(n, dtype=jnp.float32) + 1.0)
             state, rec_buf = scan_chunk(state, ts)
+
+            # If there are no recorders, the loop can run ahead due to JAX async dispatch.
+            # Sync here only when requested (progress/accuracy).
+            if sync_progress and writer is None:
+                jax.block_until_ready(state.time)
 
             if writer is not None:
                 # Async copy to host (only if we have recorders)
@@ -96,6 +128,21 @@ class Runner:
 
                 if filtered:
                     writer.enqueue(filtered)
+
+            if progress:
+                is_last = (start + n) >= total_steps
+                if is_last or (progress_every > 0 and (chunk_idx % progress_every) == 0):
+                    done_steps = start + n
+                    frac = (done_steps / total_steps) if total_steps > 0 else 1.0
+                    wall_now = _time.perf_counter()
+                    elapsed = wall_now - wall_start
+                    rate = (done_steps / elapsed) if elapsed > 0 else 0.0
+                    eta = ((total_steps - done_steps) / rate) if rate > 0 else float("inf")
+                    sim_t = base_time + done_steps * dt
+                    print(
+                        f"[{frac*100:6.2f}%] step {done_steps}/{total_steps}  t={sim_t:.6g}s  {rate:,.0f} steps/s  ETA {eta:,.1f}s",
+                        flush=True,
+                    )
 
         if writer is not None:
             writer.close()

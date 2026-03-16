@@ -2,6 +2,7 @@ import jax.numpy as jnp
 from femora_solver.compile.compiler import Compiler
 from femora_solver.analysis.runner import Runner
 from femora_solver.state.state import State, FieldState
+from typing import Optional
 
 class Model:
     def __init__(self, name: str):
@@ -109,11 +110,19 @@ class Model:
             history={}
         )
 
-    def run(self, dt, time):
+    def run(self, dt, time, progress: bool = False, progress_every: int = 1, sync_progress: Optional[bool] = None):
         if self._dirty >= 4:
             self._execution_plan = self._compiler.full_compile(self)
             if self._state is None:
                 self._init_state()
         self._dirty = 0
         
-        self._state = self._runner.run(self._execution_plan, self._state, dt, time)
+        self._state = self._runner.run(
+            self._execution_plan,
+            self._state,
+            dt,
+            time,
+            progress=progress,
+            progress_every=progress_every,
+            sync_progress=sync_progress,
+        )

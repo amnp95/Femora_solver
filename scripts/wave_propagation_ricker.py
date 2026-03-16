@@ -131,7 +131,7 @@ def run_wave_ricker_box():
     dt = 1e-5
     time = 0.02
     print(f"Running wave propagation: time={time}s dt={dt} (rec_interval={rec_interval})")
-    model.run(dt=dt, time=time)
+    model.run(dt=dt, time=time, progress=True)
 
     # ---- Quick post metrics: arrival at bottom probe ----
     with h5py.File(rec_file, "r") as f:
