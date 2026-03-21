@@ -92,6 +92,17 @@ class Model:
         force: Union[List[float], np.ndarray, jax.Array],
         time_fn: Any = None
     ):
+        # Validation: Ensure force matches node count (allow single vector for broadcasting)
+        f_arr = jnp.array(force)
+        n_nodes = len(node_indices)
+        if f_arr.ndim == 2:
+            n_forces = f_arr.shape[0]
+            if n_forces != 1 and n_forces != n_nodes:
+                raise ValueError(
+                    f"Load '{name}' mismatch: {n_nodes} nodes but {n_forces} force vectors provided. "
+                    "Must provide exactly one vector (to be broadcast) or one vector per node."
+                )
+
         self._loads.append({
             "name": name,
             "kind": kind,
