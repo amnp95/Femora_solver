@@ -2,7 +2,9 @@ import jax.numpy as jnp
 from femora_solver.compile.compiler import Compiler
 from femora_solver.analysis.runner import Runner
 from femora_solver.state.state import State, FieldState
-from typing import Optional
+from typing import Optional, Any, Union, List, Dict
+import numpy as np
+import jax
 
 
 class Model:
@@ -24,12 +26,19 @@ class Model:
         self._dirty = 4 # FULL compile
         self._profiler = None
         
-    def add_nodes(self, coords):
+    def add_nodes(self, coords: Union[List[List[float]], np.ndarray, jax.Array]):
         self._nodes = jnp.array(coords)
         self._num_nodes = len(coords)
         self._dirty = 4
         
-    def add_elements(self, conn, family="Hex8", material=None, block_id=None, section_params=None):
+    def add_elements(
+        self,
+        conn: Union[List[List[int]], np.ndarray, jax.Array],
+        family: str = "Hex8",
+        material: Optional[str] = None,
+        block_id: Optional[str] = None,
+        section_params: Any = None
+    ):
         if block_id is None:
             block_id = f"block_{len(self._blocks)}"
         
@@ -48,11 +57,21 @@ class Model:
         }
         self._dirty = 4
         
-    def add_material(self, name, kind, **kwargs):
+    def add_material(self, name: str, kind: str, **kwargs):
+        if name in self._materials:
+            raise ValueError(f"Material '{name}' already exists in this model.")
         self._materials[name] = {"kind": kind, **kwargs}
         self._dirty = 4
         
-    def add_constraint(self, name, kind, node_indices, dofs=None, components=None, field="U"):
+    def add_constraint(
+        self,
+        name: str,
+        kind: str,
+        node_indices: Union[List[int], np.ndarray, jax.Array],
+        dofs: Any = None,
+        components: Optional[List[int]] = None,
+        field: str = "U"
+    ):
         if components is None:
             components = [0, 1, 2] # Default x,y,z
         self._constraints.append({
@@ -64,7 +83,15 @@ class Model:
         })
         self._dirty = max(self._dirty, 2)
         
-    def add_load(self, name, kind, field, node_indices, force, time_fn=None):
+    def add_load(
+        self,
+        name: str,
+        kind: str,
+        field: str,
+        node_indices: Union[List[int], np.ndarray, jax.Array],
+        force: Union[List[float], np.ndarray, jax.Array],
+        time_fn: Any = None
+    ):
         self._loads.append({
             "name": name,
             "kind": kind,
@@ -75,7 +102,15 @@ class Model:
         })
         self._dirty = max(self._dirty, 1)
         
-    def add_recorder(self, name, kind, node_indices, field, interval, file):
+    def add_recorder(
+        self,
+        name: str,
+        kind: str,
+        node_indices: Union[List[int], np.ndarray, jax.Array],
+        field: str,
+        interval: int,
+        file: str
+    ):
         self._recorders.append({
             "id": name,
             "kind": kind,
