@@ -2,6 +2,7 @@ import jax.numpy as jnp
 from femora_solver.compile.compiler import Compiler
 from femora_solver.analysis.runner import Runner
 from femora_solver.state.state import State, FieldState
+from femora_solver.loads.load_plan import normalize_time_fn
 from typing import Optional, Any, Union, List, Dict
 import numpy as np
 import jax
@@ -103,13 +104,16 @@ class Model:
                     "Must provide exactly one vector (to be broadcast) or one vector per node."
                 )
 
+        # Validation: Check and normalize the time function
+        time_fn_spec = normalize_time_fn(time_fn)
+
         self._loads.append({
             "name": name,
             "kind": kind,
             "field": field,
             "node_indices": node_indices,
             "force": force,
-            "time_fn": time_fn,
+            "time_fn": time_fn_spec,
         })
         self._dirty = max(self._dirty, 1)
         

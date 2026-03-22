@@ -108,29 +108,6 @@ class Compiler:
             # -----------------------------------------------------------
             # 4. Loads + time functions
             # -----------------------------------------------------------
-            def _normalize_time_fn(spec):
-                # Returns (kind:int, params:tuple[float,float,float,float])
-                if spec is None:
-                    return (TIME_FN_CONSTANT, (1.0, 0.0, 0.0, 0.0))
-                if isinstance(spec, (int, float)):
-                    return (TIME_FN_CONSTANT, (float(spec), 0.0, 0.0, 0.0))
-                if isinstance(spec, dict):
-                    kind = str(spec.get("kind", "Constant")).strip().lower()
-                    if kind in ("const", "constant"):
-                        scale = spec.get("scale", spec.get("value", 1.0))
-                        return (TIME_FN_CONSTANT, (float(scale), 0.0, 0.0, 0.0))
-                    if kind in ("ricker", "ricker_wavelet", "rickerwavelet"):
-                        amp = float(spec.get("amp", spec.get("scale", 1.0)))
-                        f0 = spec.get("f0", spec.get("freq", spec.get("frequency")))
-                        if f0 is None:
-                            raise ValueError("Ricker time_fn requires 'f0' (Hz).")
-                        t0 = float(spec.get("t0", spec.get("t_peak", 0.0)))
-                        return (TIME_FN_RICKER, (amp, float(f0), t0, 0.0))
-                    raise ValueError(f"Unsupported time_fn kind: {spec.get('kind')!r}")
-                raise TypeError(
-                    "time_fn must be None, a number (constant scale), or a dict like {kind: 'Ricker', f0: ..., t0: ...}."
-                )
-
             # Table index 0 is always Constant(scale=1) for backward compatibility.
             time_fn_entries = [(TIME_FN_CONSTANT, (1.0, 0.0, 0.0, 0.0))]
             time_fn_map = {time_fn_entries[0]: 0}
@@ -149,7 +126,7 @@ class Compiler:
                 elif force_pattern.ndim == 2 and force_pattern.shape[0] == 1 and node_indices.shape[0] != 1:
                     force_pattern = jnp.broadcast_to(force_pattern, (node_indices.shape[0], force_pattern.shape[1]))
 
-                tf_key = _normalize_time_fn(l.get("time_fn"))
+                tf_key = l.get("time_fn")
                 if tf_key not in time_fn_map:
                     time_fn_map[tf_key] = len(time_fn_entries)
                     time_fn_entries.append(tf_key)
