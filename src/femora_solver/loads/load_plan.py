@@ -4,7 +4,8 @@ from typing import List
 
 # Time function kinds (compiled into arrays; evaluated inside the JITted step function)
 TIME_FN_CONSTANT = 0
-TIME_FN_RICKER = 1
+TIME_FN_LINEAR = 1
+TIME_FN_TIME_SERIES = 2
 
 TIME_FN_NPARAM = 4  # [p0, p1, p2, p3] meaning depends on kind
 
@@ -13,29 +14,44 @@ def normalize_time_fn(spec):
     Normalizes time function specification into (kind: int, params: tuple[float,float,float,float])
     
     This provides immediate validation for user-provided time functions.
+    Supported Kinds:
+        - Constant: (scale)
+        - Linear:   (t0, t1, amp)
+        - TimeSeries: (path_id) -- custom user data
     """
-    from typing import Dict, Any, Union
-    
     if spec is None:
         return (TIME_FN_CONSTANT, (1.0, 0.0, 0.0, 0.0))
     if isinstance(spec, (int, float)):
         return (TIME_FN_CONSTANT, (float(spec), 0.0, 0.0, 0.0))
     if isinstance(spec, dict):
         kind = str(spec.get("kind", "Constant")).strip().lower()
+        
+        # 0. Constant
         if kind in ("const", "constant"):
-            scale = spec.get("scale", spec.get("value", 1.0))
-            return (TIME_FN_CONSTANT, (float(scale), 0.0, 0.0, 0.0))
-        if kind in ("ricker", "ricker_wavelet", "rickerwavelet"):
+            scale = float(spec.get("scale", spec.get("value", 1.0)))
+            return (TIME_FN_CONSTANT, (scale, 0.0, 0.0, 0.0))
+            
+        # 1. Linear Ramp
+        if kind in ("lin", "linear", "ramp"):
+            t0 = float(spec.get("t0", spec.get("start_time", 0.0)))
+            t1 = float(spec.get("t1", spec.get("end_time", 1.0)))
             amp = float(spec.get("amp", spec.get("scale", 1.0)))
-            f0 = spec.get("f0", spec.get("freq", spec.get("frequency")))
-            if f0 is None:
-                raise ValueError("Ricker time_fn requires 'f0' (Hz).")
-            t0 = float(spec.get("t0", spec.get("t_peak", 0.0)))
-            return (TIME_FN_RICKER, (amp, float(f0), t0, 0.0))
+            if t1 <= t0:
+                raise ValueError(f"Linear time_fn error: t1 ({t1}) must be greater than t0 ({t0}).")
+            return (TIME_FN_LINEAR, (t0, t1, amp, 0.0))
+            
+        # 2. Time Series (Experimental Data / Any arbitrary path)
+        if kind in ("path", "timeseries", "time_series"):
+            # Note: The raw list of [t, v] points lives in a separate data pool.
+            # Here, we only store the "Series ID" if it was pre-allocated, 
+            # OR we just flag it for the compiler to handle later.
+            series_id = float(spec.get("id", spec.get("series_id", 0.0)))
+            return (TIME_FN_TIME_SERIES, (series_id, 0.0, 0.0, 0.0))
+            
         raise ValueError(f"Unsupported time_fn kind: {spec.get('kind')!r}")
     
     raise TypeError(
-        "time_fn must be None, a number (constant scale), or a dict like {kind: 'Ricker', f0: ..., t0: ...}."
+        "time_fn must be None, a number (constant scale), or a dict like {kind: 'Linear', t0: ..., t1: ..., amp: ...}."
     )
 
 @dataclass
