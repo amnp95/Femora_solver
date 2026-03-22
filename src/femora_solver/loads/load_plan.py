@@ -15,9 +15,9 @@ def normalize_time_fn(spec):
     
     This provides immediate validation for user-provided time functions.
     Supported Kinds:
-        - Constant: (scale)
+        - Constant: (amp)
         - Linear:   (t0, t1, amp)
-        - TimeSeries: (path_id) -- custom user data
+        - TimeSeries: (path_id, amp, t_offset) -- custom user data
     """
     if spec is None:
         return (TIME_FN_CONSTANT, (1.0, 0.0, 0.0, 0.0))
@@ -26,12 +26,12 @@ def normalize_time_fn(spec):
     if isinstance(spec, dict):
         kind = str(spec.get("kind", "Constant")).strip().lower()
         
-        # 0. Constant
+        # 0. Constant: (amp, ...)
         if kind in ("const", "constant"):
-            scale = float(spec.get("scale", spec.get("value", 1.0)))
-            return (TIME_FN_CONSTANT, (scale, 0.0, 0.0, 0.0))
+            amp = float(spec.get("amp", spec.get("scale", spec.get("value", 1.0))))
+            return (TIME_FN_CONSTANT, (amp, 0.0, 0.0, 0.0))
             
-        # 1. Linear Ramp
+        # 1. Linear Ramp: (t0, t1, amp, ...)
         if kind in ("lin", "linear", "ramp"):
             t0 = float(spec.get("t0", spec.get("start_time", 0.0)))
             t1 = float(spec.get("t1", spec.get("end_time", 1.0)))
@@ -40,18 +40,17 @@ def normalize_time_fn(spec):
                 raise ValueError(f"Linear time_fn error: t1 ({t1}) must be greater than t0 ({t0}).")
             return (TIME_FN_LINEAR, (t0, t1, amp, 0.0))
             
-        # 2. Time Series (Experimental Data / Any arbitrary path)
+        # 2. Time Series: (path_id, amp, t_offset, ...)
         if kind in ("path", "timeseries", "time_series"):
-            # Note: The raw list of [t, v] points lives in a separate data pool.
-            # Here, we only store the "Series ID" if it was pre-allocated, 
-            # OR we just flag it for the compiler to handle later.
             series_id = float(spec.get("id", spec.get("series_id", 0.0)))
-            return (TIME_FN_TIME_SERIES, (series_id, 0.0, 0.0, 0.0))
+            amp = float(spec.get("amp", spec.get("scale", 1.0)))
+            offset = float(spec.get("offset", spec.get("t_offset", 0.0)))
+            return (TIME_FN_TIME_SERIES, (series_id, amp, offset, 0.0))
             
         raise ValueError(f"Unsupported time_fn kind: {spec.get('kind')!r}")
     
     raise TypeError(
-        "time_fn must be None, a number (constant scale), or a dict like {kind: 'Linear', t0: ..., t1: ..., amp: ...}."
+        "time_fn must be None, a number (constant amplitude), or a dict like {kind: 'Linear', t0: ..., t1: ..., amp: ...}."
     )
 
 @dataclass
