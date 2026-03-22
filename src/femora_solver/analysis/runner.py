@@ -83,7 +83,7 @@ class Runner:
         progress: bool = False,
         progress_every: int = 1,
         sync_progress: Optional[bool] = None,
-    ) -> State:
+        ) -> State:
         total_steps = int(round(time / dt))
         if chunk_size is None:
             chunk_size = int(plan.chunk_size)
@@ -92,6 +92,8 @@ class Runner:
         if chunk_size <= 0:
             raise ValueError("chunk_size must be a positive integer")
 
+        # Build step function
+        # The step function is the core of the solver. It takes the current state and the current time step, and returns the functions that compute the next state. We use jax.jit to compile the step function for better performance.
         step_fn     = build_step_fn(plan, dt)
         
         # JIT compile the scan body
@@ -192,7 +194,7 @@ class Runner:
         progress: bool = False,
         progress_every: int = 1,
         profiler=None,
-    ) -> State:
+        ) -> State:
         total_steps = int(round(time / dt))
         if chunk_size is None:
             chunk_size = int(plan.chunk_size)
