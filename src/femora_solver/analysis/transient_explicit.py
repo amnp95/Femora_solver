@@ -8,23 +8,35 @@ def _eval_time_fn(kind: jax.Array, params: jax.Array, t: jax.Array) -> jax.Array
     """Return scalar load scale factor at time t.
 
     kind meanings (see femora_solver.loads.load_plan):
-      0: Constant -> params[0]
-      1: Ricker   -> amp*(1-2a)*exp(-a), a=(pi*f0*(t-t0))^2
+      0: Constant   -> amp
+      1: Linear     -> ramp from t0 to t1 up to amp
+      2: TimeSeries -> interpolated user data scaled by amp (shifted by t_offset)
     """
     kind_i = kind.astype(jnp.int32)
 
     def _constant(_):
-        return params[0]
+        return params[0] # amp
 
-    def _ricker(_):
-        amp = params[0]
-        f0 = params[1]
-        t0 = params[2]
-        x = jnp.pi * f0 * (t - t0)
-        a = x * x
-        return amp * (1.0 - 2.0 * a) * jnp.exp(-a)
+    def _linear(_):
+        t0  = params[0]
+        t1  = params[1]
+        amp = params[2]
+        
+        # Calculate normalized slope (0 to 1) between t0 and t1
+        # m = (t - t0) / (t1 - t0)
+        m = (t - t0) / (t1 - t0)
+        m = jnp.clip(m, 0.0, 1.0)
+        return amp * m
 
-    return jax.lax.switch(kind_i, (_constant, _ricker), operand=None)
+    def _time_series(_):
+        # TODO: Implement 1D Linear Interpolation for TimeSeries data.
+        # For now, just return the constant amplitude (multiplier).
+        series_id = params[0]
+        amp       = params[1]
+        t_offset  = params[2]
+        return amp
+
+    return jax.lax.switch(kind_i, (_constant, _linear, _time_series), operand=None)
 
 def build_step_fn(plan: ExecutionPlan, dt: float):
     def step_fn(state: State, t: float):
